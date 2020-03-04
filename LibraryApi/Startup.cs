@@ -58,6 +58,13 @@ namespace LibraryApi
                 var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
                 var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
                 c.IncludeXmlComments(xmlPath);
+
+                services.AddDistributedRedisCache(options =>
+                {
+                    options.Configuration = Configuration.GetValue<string>("redishost");
+                });
+
+                services.AddResponseCaching();
             });
         }
 
@@ -68,6 +75,13 @@ namespace LibraryApi
             {
                 app.UseDeveloperExceptionPage();
             }
+            app.UseResponseCaching();
+            app.UseCors(options =>
+            {
+                options.AllowAnyOrigin();
+                options.AllowAnyMethod();
+                options.AllowAnyHeader();
+            });
             app.UseSwagger();
             app.UseSwaggerUI(c =>
             {
