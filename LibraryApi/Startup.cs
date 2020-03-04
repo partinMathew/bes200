@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using AutoMapper;
 using LibraryApi.Domain;
@@ -17,6 +18,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.OpenApi.Models;
+using RabbitMqUtils;
 
 namespace LibraryApi
 {
@@ -35,12 +37,21 @@ namespace LibraryApi
             services.AddAutoMapper(typeof(Startup));
             services.AddTransient<IGenerateEmployeeIds, EmployeeIdGenerator>();
             services.AddScoped<IMapBooks, EfSqlBookMapper>();
-            services.AddControllers();
+            services.AddControllers().AddJsonOptions(options => 
+            {
+                options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+                options.JsonSerializerOptions.IgnoreNullValues = true;
+            });
             services.AddDbContext<LibraryDataContext>(options =>
                 options.UseSqlServer(Configuration.GetConnectionString("LibraryDatabase"))
                 // Don't do this!
             );
+            services.AddDistributedRedisCache(options =>
+            {
+                options.Configuration = Configuration.GetValue<string>("redishost");
+            });
 
+            services.AddResponseCaching();
             services.AddSwaggerGen(c =>
             {
                 c.SwaggerDoc("v1", new OpenApiInfo
@@ -59,13 +70,10 @@ namespace LibraryApi
                 var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
                 c.IncludeXmlComments(xmlPath);
 
-                services.AddDistributedRedisCache(options =>
-                {
-                    options.Configuration = Configuration.GetValue<string>("redishost");
-                });
-
-                services.AddResponseCaching();
+               
             });
+            services.AddRabbit(Configuration);
+            services.AddScoped<ISendMessagesToTheReservationProcessor, RabbitMqReservationProcessor>();
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
